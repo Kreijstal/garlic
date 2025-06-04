@@ -148,15 +148,34 @@ static void jar_inner_and_anoymous_class(jd_jar *jar)
 
 static void jar_entry_source_file(jclass_file *jc, string dir, string name)
 {
+    // Get thread-local memory pool
+    thread_local_data *tls = get_thread_local_data();
+    mem_pool *pool = tls ? tls->pool : NULL;
+    
     struct stat sb;
-    string full_dir = str_create("%s/%s", dir, dirname(name));
+    
+    // Make a safe copy of name since dirname can modify its argument
+    string name_copy = pool ? 
+        str_create_in(pool, "%s", name) :
+        str_create("%s", name);
+    
+    // Use thread-local memory allocation
+    string full_dir = pool ? 
+        str_create_in(pool, "%s/%s", dir, dirname(name_copy)) :
+        str_create("%s/%s", dir, dirname(name_copy));
+    
     if (stat(full_dir, &sb) == -1)
         make_dir(full_dir);
 
     jcp_info *info = pool_item(jc, jc->this_class);
     string full = get_class_name(jc, info);
     string class_name = class_simple_name(full);
-    string path = str_create("%s/%s.java", full_dir, class_name);
+    
+    // Use thread-local memory allocation
+    string path = pool ?
+        str_create_in(pool, "%s/%s.java", full_dir, class_name) :
+        str_create("%s/%s.java", full_dir, class_name);
+    
     FILE *stream = fopen(path, "w");
     if (stream == NULL)
         printf("[error]: path: %s, error: %s\n", path, strerror(errno));
@@ -239,7 +258,19 @@ void jar_entry_thread_task(jd_jar_entry *entry)
     if (jf && jf->parent == NULL) {
         printf("DEBUG: writing class file\n");
         writter_for_class(jf, NULL);
-        fclose(jf->source);
+        
+        printf("DEBUG: closing file stream\n");
+        if (jf->source != NULL) {
+            printf("DEBUG: fclose called on stream: %p\n", (void*)jf->source);
+            if (fclose(jf->source) != 0) {
+                printf("ERROR: fclose failed: %s\n", strerror(errno));
+            } else {
+                printf("DEBUG: fclose successful\n");
+            }
+            jf->source = NULL;
+        } else {
+            printf("DEBUG: jf->source is NULL, no need to close\n");
+        }
     }
     
     printf("DEBUG: freeing memory pool\n");

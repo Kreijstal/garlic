@@ -51,9 +51,7 @@ static void *threadpool_thread(void *threadpool);
 int threadpool_free(threadpool_t *pool);
 
 void create_tls_key() {
-    printf("DEBUG: create_tls_key called\n");
     int result = pthread_key_create(&tls_key, NULL);
-    printf("DEBUG: pthread_key_create returned: %d, tls_key: %u\n", result, (unsigned int)tls_key);
     
     if (result != 0) {
         fprintf(stderr, "ERROR: pthread_key_create failed with code: %d\n", result);
@@ -61,12 +59,10 @@ void create_tls_key() {
     }
     
     tls_key_initialized = 1;
-    printf("DEBUG: TLS key initialization complete\n");
 }
 
 thread_local_data* get_thread_local_data() {
     if (!tls_key_initialized) {
-        printf("DEBUG: get_thread_local_data - TLS key not initialized\n");
         return NULL;
     }
     
